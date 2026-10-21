@@ -1,0 +1,59 @@
+services:
+    app:
+        build: ./app
+        container_name: app
+        ports:
+            - '3000:3000'
+        depends_on:
+            postgres:
+                condition: service_healthy
+            database:
+                condition: service_started
+
+    database:
+        build: ./database
+        container_name: database
+        ports:
+            - '4000:4000'
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    postgres:
+        image: postgres:17
+        container_name: postgres
+        environment:
+            POSTGRES_DB: requests
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        ports:
+            - '5433:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d requests"]
+            interval: 3s
+            timeout: 3s
+            retries: 10
+            start_period: 10s
+
+    faker-seeder:
+        image: python:3.11-slim
+        container_name: faker-seeder
+        volumes:
+            - ./seeder:/app
+        working_dir: /app
+        command: >
+            sh -c "pip install psycopg2-binary faker && python seeder.py"
+        environment:
+            DB_HOST: postgres
+            DB_NAME: requests
+            DB_USER: postgres
+            DB_PASSWORD: postgres
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+volumes:
+    postgres_data:
